@@ -1,0 +1,59 @@
+# Desenvolvimento / teste local (API + Postgres no mesmo Compose)
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: montwhats
+      POSTGRES_PASSWORD: montwhats
+      POSTGRES_DB: montwhats
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U montwhats -d montwhats"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build: .
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://montwhats:montwhats@postgres:5432/montwhats
+      DATABASE_SSL: "false"
+      MASTER_ADMIN_KEY: ${MASTER_ADMIN_KEY:-change-me-to-a-long-random-secret}
+      SESSIONS_PATH: /data/sessions
+      ANTIBAN_JITTER_MIN_MS: ${ANTIBAN_JITTER_MIN_MS:-3000}
+      ANTIBAN_JITTER_MAX_MS: ${ANTIBAN_JITTER_MAX_MS:-15000}
+      ANTIBAN_COMPOSING_MS: ${ANTIBAN_COMPOSING_MS:-1200}
+      ANTIBAN_WARMUP_PHASE1_DAILY: ${ANTIBAN_WARMUP_PHASE1_DAILY:-30}
+      ANTIBAN_WARMUP_PHASE2_DAILY: ${ANTIBAN_WARMUP_PHASE2_DAILY:-80}
+      ANTIBAN_WARMUP_PHASE3_DAILY: ${ANTIBAN_WARMUP_PHASE3_DAILY:-180}
+      ANTIBAN_HOURLY_CAP: ${ANTIBAN_HOURLY_CAP:-25}
+      ANTIBAN_BLAST_SAME_TEXT_LIMIT: ${ANTIBAN_BLAST_SAME_TEXT_LIMIT:-5}
+      ANTIBAN_BLAST_WINDOW_MS: ${ANTIBAN_BLAST_WINDOW_MS:-600000}
+      ANTIBAN_COLD_CONTACT_STREAK: ${ANTIBAN_COLD_CONTACT_STREAK:-8}
+    volumes:
+      - sessions_data:/data/sessions
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  sessions_data:
