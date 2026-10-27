@@ -4,6 +4,28 @@ import { config } from "../config.js";
 
 const { Pool } = pg;
 
+/**
+ * Remove sslmode da URL. No pg recente, sslmode=require vira verify-full
+ * e causa SELF_SIGNED_CERT_IN_CHAIN com Managed Postgres da DO.
+ * O SSL fica só no objeto `ssl` do Pool.
+ */
+function stripSslParams(url: string): string {
+  try {
+    const u = new URL(url);
+    u.searchParams.delete("sslmode");
+    u.searchParams.delete("uselibpqcompat");
+    const qs = u.searchParams.toString();
+    u.search = qs ? `?${qs}` : "";
+    return u.toString();
+  } catch {
+    return url
+      .replace(/([?&])sslmode=[^&]*/gi, "$1")
+      .replace(/([?&])uselibpqcompat=[^&]*/gi, "$1")
+      .replace(/[?&]$/, "")
+      .replace(/\?&/, "?");
+  }
+}
+
 function buildSsl(): pg.PoolConfig["ssl"] {
   if (!config.databaseSsl) return undefined;
 
@@ -15,13 +37,12 @@ function buildSsl(): pg.PoolConfig["ssl"] {
     };
   }
 
-  // Managed DO exige SSL; sem CA local aceitamos o certificado do servidor.
-  // Para verificação estrita: baixe o CA no painel DO e defina DATABASE_CA_PATH.
+  // DigitalOcean Managed Postgres (cadeia própria) — aceitar sem CA local.
   return { rejectUnauthorized: false };
 }
 
 export const pool = new Pool({
-  connectionString: config.databaseUrl,
+  connectionString: stripSslParams(config.databaseUrl),
   ssl: buildSsl(),
 });
 

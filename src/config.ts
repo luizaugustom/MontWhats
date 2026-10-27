@@ -22,6 +22,7 @@ function boolEnv(name: string, fallback: boolean): boolean {
 
 function detectDatabaseSsl(databaseUrl: string): boolean {
   if (boolEnv("DATABASE_SSL", false)) return true;
+  if (/ondigitalocean\.com/i.test(databaseUrl)) return true;
   try {
     const u = new URL(databaseUrl);
     const mode = (u.searchParams.get("sslmode") || "").toLowerCase();
